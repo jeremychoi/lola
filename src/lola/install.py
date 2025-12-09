@@ -34,47 +34,9 @@ def get_registry() -> InstallationRegistry:
     return InstallationRegistry(INSTALLED_FILE)
 
 
-def link_module_to_local(module: Module, local_modules_path: Path) -> Path:
-    """
-    Link a module from the global registry to the local .lola/modules/.
-
-    For user scope (same path), just returns the path.
-    For project scope, creates a symlink to the global module.
-
-    Args:
-        module: The module to link
-        local_modules_path: Path to .lola/modules/
-
-    Returns:
-        Path to the linked module
-    """
-    dest = local_modules_path / module.name
-
-    # If source and dest are the same (user scope), just return the path
-    if dest.resolve() == module.path.resolve():
-        return dest
-
-    # Ensure parent directory exists
-    local_modules_path.mkdir(parents=True, exist_ok=True)
-
-    # Remove existing link/directory if present
-    if dest.is_symlink() or dest.exists():
-        if dest.is_symlink():
-            dest.unlink()
-        else:
-            shutil.rmtree(dest)
-
-    # Create symlink to global module
-    dest.symlink_to(module.path.resolve())
-
-    return dest
-
-
 def copy_module_to_local(module: Module, local_modules_path: Path) -> Path:
     """
     Copy a module from the global registry to the local .lola/modules/.
-
-    Used for Gemini CLI which cannot follow symlinks outside the workspace.
 
     Args:
         module: The module to copy
@@ -362,12 +324,8 @@ def install_to_assistant(
 
     console.print(f"[bold]{assistant}[/bold] -> {skill_dest}")
 
-    # Copy or link module to local .lola/modules/
-    # Gemini needs a copy since it can't follow symlinks outside workspace
-    if assistant == 'gemini-cli':
-        local_module_path = copy_module_to_local(module, local_modules)
-    else:
-        local_module_path = link_module_to_local(module, local_modules)
+    # Copy module to local .lola/modules/
+    local_module_path = copy_module_to_local(module, local_modules)
 
     # Generate assistant-specific files
     installed_skills = []
@@ -713,12 +671,8 @@ def update_cmd(module_name: Optional[str], assistant: Optional[str]):
 
         local_modules = get_local_modules_path(inst.project_path)
 
-        # Refresh the local copy/symlink from global module
-        # Gemini needs a fresh copy, others use symlinks
-        if inst.assistant == 'gemini-cli':
-            source_module = copy_module_to_local(global_module, local_modules)
-        else:
-            source_module = link_module_to_local(global_module, local_modules)
+        # Refresh the local copy from global module
+        source_module = copy_module_to_local(global_module, local_modules)
 
         try:
             skill_dest = get_assistant_skill_path(inst.assistant, inst.scope, inst.project_path)

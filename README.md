@@ -207,7 +207,7 @@ Your instructions, workflows, and guidance for the AI assistant.
 
 1. **Registry**: Modules are stored in `~/.lola/modules/`
 2. **Installation**: Skills are converted and copied to assistant-specific locations
-3. **Project scope**: Uses symlinks to the global module for space efficiency
+3. **Project scope**: Copies modules to `.lola/modules/` within the project
 4. **Updates**: `lola mod update` re-fetches from original source; `lola update` regenerates files
 
 ## License
