@@ -1,6 +1,12 @@
 # Lola - AI Skills Package Manager
 
-Lola manages and installs AI skills across different AI assistants. Package your prompts, workflows, and instructions into reusable modules that work with Claude Code, Cursor, and Gemini CLI.
+**Write your AI context once, use it everywhere.**
+
+Every AI tool wants its own prompt format. Claude Code uses `SKILL.md`. Cursor uses `.mdc` rules. Gemini CLI uses `GEMINI.md`. You end up maintaining the same instructions in three different places—or worse, giving up and only using one tool.
+
+Lola fixes this. Write your skills once as portable modules, then install them everywhere with a single command.
+
+[![asciicast](https://asciinema.org/a/UsbI8adasbdAhAFQuiXj70eVp.svg)](https://asciinema.org/a/UsbI8adasbdAhAFQuiXj70eVp)
 
 ## Supported AI Assistants
 
