@@ -269,10 +269,11 @@ class Module:
 
             # Custom subdirectory path
             custom_subdir = module_path / content_dirname
-            if not custom_subdir.exists() or not custom_subdir.is_dir():
-                return None, False
+            if custom_subdir.exists() and custom_subdir.is_dir():
+                return custom_subdir, True
 
-            return custom_subdir, True
+            # Subdirectory not found — content may have been extracted
+            # at fetch time; fall through to default discovery.
 
         # Default discovery: try module/ then fallback to root
         module_subdir = module_path / MODULE_CONTENT_DIRNAME

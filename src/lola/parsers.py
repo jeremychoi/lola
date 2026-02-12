@@ -75,6 +75,55 @@ def validate_module_name(name: str) -> str:
     return name
 
 
+def _extract_content_subdir(
+    module_dir: Path, module_content_dirname: Optional[str]
+) -> Path:
+    """Extract content subdirectory from a fetched module.
+
+    When module_content_dirname is provided (and not "/"), replaces the
+    module directory contents with only the specified subdirectory. This
+    ensures ~/.lola/modules/<name>/ contains clean module content rather
+    than the entire repository.
+
+    Args:
+        module_dir: Path to the fetched module directory
+        module_content_dirname: Subdirectory containing module content,
+                                "/" for root, or None to skip extraction
+
+    Returns:
+        Path to the module directory (unchanged path, updated contents)
+
+    Raises:
+        SourceError: If the specified subdirectory doesn't exist
+    """
+    if not module_content_dirname or module_content_dirname == "/":
+        return module_dir
+
+    content_subdir = module_dir / module_content_dirname
+    if not content_subdir.exists() or not content_subdir.is_dir():
+        raise SourceError(
+            str(module_dir),
+            f"Content directory '{module_content_dirname}' not found in fetched source",
+        )
+
+    # Extract: move subdirectory content to replace module directory
+    tmp_dir = module_dir.parent / f".{module_dir.name}._content_extract"
+    if tmp_dir.exists():
+        shutil.rmtree(tmp_dir)
+
+    try:
+        shutil.copytree(content_subdir, tmp_dir)
+        shutil.rmtree(module_dir)
+        tmp_dir.rename(module_dir)
+    except Exception:
+        # Clean up on failure
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir)
+        raise
+
+    return module_dir
+
+
 class SourceHandler(ABC):
     """Base class for module source handlers."""
 
@@ -82,10 +131,15 @@ class SourceHandler(ABC):
     def can_handle(self, source: str) -> bool:  # pragma: no cover
         pass
 
-    @abstractmethod
     def fetch(
         self, source: str, dest_dir: Path, module_content_dirname: Optional[str] = None
-    ) -> Path:  # pragma: no cover
+    ) -> Path:
+        """Fetch module source and extract content subdirectory if specified."""
+        module_dir = self._do_fetch(source, dest_dir)
+        return _extract_content_subdir(module_dir, module_content_dirname)
+
+    @abstractmethod
+    def _do_fetch(self, source: str, dest_dir: Path) -> Path:  # pragma: no cover
         pass
 
 
@@ -106,9 +160,7 @@ class GitSourceHandler(SourceHandler):
             return True
         return False
 
-    def fetch(
-        self, source: str, dest_dir: Path, module_content_dirname: Optional[str] = None
-    ) -> Path:
+    def _do_fetch(self, source: str, dest_dir: Path) -> Path:
         repo_name = source.rstrip("/").split("/")[-1]
         if repo_name.endswith(".git"):
             repo_name = repo_name[:-4]
@@ -138,9 +190,7 @@ class ZipSourceHandler(SourceHandler):
     def can_handle(self, source: str) -> bool:
         return source.endswith(".zip") and Path(source).exists()
 
-    def fetch(
-        self, source: str, dest_dir: Path, module_content_dirname: Optional[str] = None
-    ) -> Path:
+    def _do_fetch(self, source: str, dest_dir: Path) -> Path:
         source_path = Path(source)
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -208,9 +258,7 @@ class TarSourceHandler(SourceHandler):
         )
         return is_tar and Path(source).exists()
 
-    def fetch(
-        self, source: str, dest_dir: Path, module_content_dirname: Optional[str] = None
-    ) -> Path:
+    def _do_fetch(self, source: str, dest_dir: Path) -> Path:
         source_path = Path(source)
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -268,9 +316,7 @@ class ZipUrlSourceHandler(SourceHandler):
             ".zip"
         )
 
-    def fetch(
-        self, source: str, dest_dir: Path, module_content_dirname: Optional[str] = None
-    ) -> Path:
+    def _do_fetch(self, source: str, dest_dir: Path) -> Path:
         parsed = urlparse(source)
         filename = Path(parsed.path).name
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -317,9 +363,7 @@ class TarUrlSourceHandler(SourceHandler):
         path_lower = parsed.path.lower()
         return any(path_lower.endswith(ext) for ext in self.TAR_EXTENSIONS)
 
-    def fetch(
-        self, source: str, dest_dir: Path, module_content_dirname: Optional[str] = None
-    ) -> Path:
+    def _do_fetch(self, source: str, dest_dir: Path) -> Path:
         parsed = urlparse(source)
         filename = Path(parsed.path).name
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -351,9 +395,7 @@ class FolderSourceHandler(SourceHandler):
         path = Path(source)
         return path.exists() and path.is_dir()
 
-    def fetch(
-        self, source: str, dest_dir: Path, module_content_dirname: Optional[str] = None
-    ) -> Path:
+    def _do_fetch(self, source: str, dest_dir: Path) -> Path:
         source_path = Path(source).resolve()
         module_name = validate_module_name(source_path.name)
 
@@ -558,7 +600,7 @@ def update_module(module_path: Path) -> str:
         tmp_path = Path(tmp_dir)
 
         try:
-            new_path = handler.fetch(source, tmp_path)
+            new_path = handler.fetch(source, tmp_path, content_dirname)
 
             # Rename to match expected module name if needed
             if new_path.name != module_name:
